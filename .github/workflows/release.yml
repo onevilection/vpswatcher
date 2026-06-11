@@ -1,0 +1,55 @@
+name: release
+
+# 公開物はタグから作る（設計 §10.3 / §15.4）。main の良コミットに SemVer タグ
+# (vX.Y.Z) を打つと発火し、Go エージェントの静的バイナリ（amd64/arm64）と
+# 各 SHA256 を、そのタグの GitHub Release へ添付する。
+on:
+  push:
+    tags:
+      - 'v*'
+
+# Release 作成に必要な最小権限のみ（デフォルトの広い権限を絞る）。
+permissions:
+  contents: write
+
+jobs:
+  build-agent:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.x' # 1.26 系の最新パッチ（go.mod の go 1.26.4 要求を満たす）
+
+      # 完全静的バイナリ（CGO_ENABLED=0）を amd64/arm64 の2本ビルド。
+      # ビルド対象は main パッケージ "."（"./..." は internal/metrics ライブラリも
+      # 含み -o <file> と両立しないため "." を指定）。
+      - name: Build static binaries (amd64 + arm64)
+        working-directory: agent
+        run: |
+          mkdir -p dist
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o dist/agent-linux-amd64 .
+          GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o dist/agent-linux-arm64 .
+
+      # SHA256 はファイル名のみを含む形式（パスを含めない）で生成する。
+      # README が `sha256sum -c agent-linux-amd64.sha256` で検証するため、
+      # dist/ に cd してから生成しパスを埋め込まない。
+      - name: Generate SHA256 checksums
+        working-directory: agent/dist
+        run: |
+          sha256sum agent-linux-amd64 > agent-linux-amd64.sha256
+          sha256sum agent-linux-arm64 > agent-linux-arm64.sha256
+
+      - name: Create Release and upload assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            agent/dist/agent-linux-amd64
+            agent/dist/agent-linux-arm64
+            agent/dist/agent-linux-amd64.sha256
+            agent/dist/agent-linux-arm64.sha256
+          fail_on_unmatched_files: true
+          generate_release_notes: true
