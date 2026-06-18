@@ -30,6 +30,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     public bool HasServer => _vm is not null;
 
+    /// <summary>
+    /// Always-on-top toggle (design §5.2.1). Bound two-way to the window's <c>Topmost</c> and to the
+    /// pin toggle; persisted to state.json (§9.2). Window-level setting (one window in Phase 3b).
+    /// </summary>
+    [ObservableProperty]
+    private bool _alwaysOnTop;
+
     public MainViewModel(ServerConfig? config, string? configError, IUiDispatcher dispatcher)
     {
         if (config is null)

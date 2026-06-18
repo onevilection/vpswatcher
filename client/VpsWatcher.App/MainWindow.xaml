@@ -2,28 +2,34 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:VpsWatcher.App.ViewModels"
-        Title="VPS監視-Mei (Phase 3a)"
-        Width="380" Height="560"
+        Title="VPS監視-Mei"
+        SizeToContent="WidthAndHeight"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        ResizeMode="NoResize"
+        Topmost="{Binding AlwaysOnTop}"
         WindowStartupLocation="CenterScreen">
-    <!-- Phase 3a: a normal window (default chrome, no transparency / Topmost / DragMove).
-         Gadget appearance is Phase 3b. -->
+    <!-- Phase 3b: transparent gadget. The opaque rounded panel below is the hit-testable surface
+         (fully transparent areas let clicks pass through, design §5.2). Title bar carries the drag
+         handle + pin (always-on-top) toggle + close button since WindowStyle=None removes chrome. -->
 
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
 
-        <!-- Metric label column -->
         <Style x:Key="MetricLabel" TargetType="TextBlock">
             <Setter Property="Width" Value="68" />
             <Setter Property="VerticalAlignment" Value="Center" />
-            <Setter Property="Foreground" Value="#444" />
+            <Setter Property="Foreground" Value="#B8BEC6" />
         </Style>
 
-        <!-- Metric value column (right-aligned numbers) -->
         <Style x:Key="MetricValue" TargetType="TextBlock">
             <Setter Property="Width" Value="92" />
             <Setter Property="TextAlignment" Value="Right" />
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="FontFamily" Value="Consolas" />
+            <Setter Property="Foreground" Value="#F0F2F5" />
         </Style>
 
         <Style x:Key="PercentBar" TargetType="ProgressBar">
@@ -32,162 +38,237 @@
             <Setter Property="Maximum" Value="100" />
             <Setter Property="Margin" Value="6,0" />
         </Style>
+
+        <!-- Flat title-bar buttons (no chrome to clash with the panel). -->
+        <Style x:Key="CaptionButton" TargetType="Button">
+            <Setter Property="Width" Value="24" />
+            <Setter Property="Height" Value="22" />
+            <Setter Property="Foreground" Value="#D8DCE2" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bg" Background="{TemplateBinding Background}" CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bg" Property="Background" Value="#33FFFFFF" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Pin toggle: outlined when off, filled when on (always-on-top). -->
+        <Style x:Key="PinToggle" TargetType="ToggleButton">
+            <Setter Property="Width" Value="26" />
+            <Setter Property="Height" Value="22" />
+            <Setter Property="Foreground" Value="#D8DCE2" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="ToolTip" Value="最前面に固定（ON/OFF）" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="bg" Background="Transparent" CornerRadius="4">
+                            <TextBlock x:Name="glyph" Text="📌" HorizontalAlignment="Center"
+                                       VerticalAlignment="Center" Opacity="0.55" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="bg" Property="Background" Value="#3354A0FF" />
+                                <Setter TargetName="glyph" Property="Opacity" Value="1.0" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bg" Property="Background" Value="#33FFFFFF" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
-    <Grid Margin="16">
-        <!-- Empty state: shown when there is no server (config missing / connect init failed).
-             StatusMessage is null when a server exists, so this collapses to nothing. -->
-        <TextBlock Text="{Binding StatusMessage}"
-                   TextWrapping="Wrap" Foreground="#B00020"
-                   VerticalAlignment="Top" />
+    <!-- Opaque rounded panel = the visible, grabbable, hit-testable gadget body. -->
+    <Border Width="360" Background="#E61E2228" CornerRadius="12" Padding="14"
+            BorderBrush="#33FFFFFF" BorderThickness="1">
+        <StackPanel>
 
-        <!-- Single server panel (Phase 3a). The container stays for N-server (ItemsControl) in 3b. -->
-        <ContentControl Content="{Binding Server}"
-                        Visibility="{Binding HasServer, Converter={StaticResource BoolToVis}}">
-            <ContentControl.ContentTemplate>
-                <DataTemplate DataType="{x:Type vm:ServerViewModel}">
-                    <StackPanel>
+            <!-- Title bar: drag handle (left, fills) + pin + close (right). DragMove starts only on
+                 the handle so the buttons stay clickable and a future reorder grip (§5.5) can live
+                 separately. -->
+            <Grid Height="26" Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
 
-                        <!-- Header: label + id -->
-                        <TextBlock Text="{Binding Label}" FontSize="18" FontWeight="Bold" />
-                        <TextBlock Text="{Binding Id}" FontSize="11" Foreground="#888" Margin="0,0,0,6" />
+                <Border x:Name="DragHandle" Grid.Column="0" Background="Transparent"
+                        MouseLeftButtonDown="DragHandle_MouseLeftButtonDown" Cursor="SizeAll">
+                    <TextBlock Text="⠿  VPS監視-Mei" Foreground="#9AA1AA" FontSize="11"
+                               VerticalAlignment="Center" />
+                </Border>
 
-                        <!-- Connection state line (color tracks state). -->
-                        <TextBlock Text="{Binding StateText}" FontWeight="SemiBold" Margin="0,0,0,4">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="Foreground" Value="#888" />
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsConnecting}" Value="True">
-                                            <Setter Property="Foreground" Value="#A06000" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding IsConnected}" Value="True">
-                                            <Setter Property="Foreground" Value="#1B7F3B" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding IsDisconnected}" Value="True">
-                                            <Setter Property="Foreground" Value="#C25E00" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding IsHostKeyMismatch}" Value="True">
-                                            <Setter Property="Foreground" Value="#B00020" />
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <ToggleButton Style="{StaticResource PinToggle}" IsChecked="{Binding AlwaysOnTop}" />
+                    <Button Style="{StaticResource CaptionButton}" Content="✕"
+                            Click="Close_Click" ToolTip="閉じる" />
+                </StackPanel>
+            </Grid>
 
-                        <!-- TOP-PRIORITY WARNING: host-key mismatch = suspected MITM (design §6.1/§5.4.1).
-                             Shown above the metrics, red, only when mismatched. Auto-reconnect is
-                             stopped by the Core service; this banner persists until the user acts. -->
-                        <Border Background="#B00020" CornerRadius="4" Padding="10" Margin="0,2,0,10"
-                                Visibility="{Binding IsHostKeyMismatch, Converter={StaticResource BoolToVis}}">
-                            <StackPanel>
-                                <TextBlock Text="⚠️ ホスト鍵不一致（なりすまし疑い）"
-                                           Foreground="White" FontWeight="Bold" FontSize="14"
-                                           TextWrapping="Wrap" />
-                                <TextBlock Text="接続を停止しました。servers.json の knownHostKey を確認してください（要確認）。"
-                                           Foreground="White" TextWrapping="Wrap" Margin="0,4,0,0" />
-                            </StackPanel>
-                        </Border>
+            <!-- Empty state (no server / config missing). Null when a server exists. -->
+            <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap" Foreground="#FF8A80" />
 
-                        <!-- CPU -->
-                        <Grid Margin="0,3">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="CPU" Style="{StaticResource MetricLabel}" />
-                            <ProgressBar Grid.Column="1" Style="{StaticResource PercentBar}" Value="{Binding CpuPct}" />
-                            <TextBlock Grid.Column="2" Text="{Binding CpuText}" Style="{StaticResource MetricValue}" />
-                        </Grid>
+            <!-- Single server panel (Phase 3a content, unchanged logic; dark-theme colors). -->
+            <ContentControl Content="{Binding Server}"
+                            Visibility="{Binding HasServer, Converter={StaticResource BoolToVis}}">
+                <ContentControl.ContentTemplate>
+                    <DataTemplate DataType="{x:Type vm:ServerViewModel}">
+                        <StackPanel>
 
-                        <!-- Memory -->
-                        <Grid Margin="0,3">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="メモリ" Style="{StaticResource MetricLabel}" />
-                            <ProgressBar Grid.Column="1" Style="{StaticResource PercentBar}" Value="{Binding MemPct}" />
-                            <TextBlock Grid.Column="2" Text="{Binding MemText}" Style="{StaticResource MetricValue}" />
-                        </Grid>
+                            <TextBlock Text="{Binding Label}" FontSize="18" FontWeight="Bold" Foreground="#F5F7FA" />
+                            <TextBlock Text="{Binding Id}" FontSize="11" Foreground="#7E848D" Margin="0,0,0,6" />
 
-                        <!-- Swap -->
-                        <Grid Margin="0,3">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="Swap" Style="{StaticResource MetricLabel}" />
-                            <ProgressBar Grid.Column="1" Style="{StaticResource PercentBar}" Value="{Binding SwapPct}" />
-                            <TextBlock Grid.Column="2" Text="{Binding SwapText}" Style="{StaticResource MetricValue}" />
-                        </Grid>
+                            <TextBlock Text="{Binding StateText}" FontWeight="SemiBold" Margin="0,0,0,4">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="#9AA1AA" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsConnecting}" Value="True">
+                                                <Setter Property="Foreground" Value="#FFC107" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsConnected}" Value="True">
+                                                <Setter Property="Foreground" Value="#5BD17E" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsDisconnected}" Value="True">
+                                                <Setter Property="Foreground" Value="#FF9F45" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsHostKeyMismatch}" Value="True">
+                                                <Setter Property="Foreground" Value="#FF6B6B" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
 
-                        <!-- Disks (0..N mounts; never assume a fixed count, §4) -->
-                        <TextBlock Text="ディスク" Foreground="#444" Margin="0,8,0,2" />
-                        <ItemsControl ItemsSource="{Binding Disks}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate DataType="{x:Type vm:DiskGaugeViewModel}">
-                                    <Grid Margin="0,3">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="{Binding Mount}" Style="{StaticResource MetricLabel}" />
-                                        <ProgressBar Grid.Column="1" Style="{StaticResource PercentBar}" Value="{Binding UsedPct}" />
-                                        <TextBlock Grid.Column="2" Text="{Binding UsedText}" Width="150"
-                                                   TextAlignment="Right" VerticalAlignment="Center"
-                                                   FontFamily="Consolas" />
-                                    </Grid>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
+                            <!-- TOP-PRIORITY host-key mismatch warning (§6.1/§5.4.1). -->
+                            <Border Background="#B00020" CornerRadius="4" Padding="10" Margin="0,2,0,10"
+                                    Visibility="{Binding IsHostKeyMismatch, Converter={StaticResource BoolToVis}}">
+                                <StackPanel>
+                                    <TextBlock Text="⚠️ ホスト鍵不一致（なりすまし疑い）"
+                                               Foreground="White" FontWeight="Bold" FontSize="14" TextWrapping="Wrap" />
+                                    <TextBlock Text="接続を停止しました。servers.json の knownHostKey を確認してください（要確認）。"
+                                               Foreground="White" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                </StackPanel>
+                            </Border>
 
-                        <!-- Network (rates have no fixed scale -> text only, no percentage bar) -->
-                        <TextBlock Text="ネットワーク" Foreground="#444" Margin="0,10,0,2" />
-                        <Grid Margin="0,3">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="↓ rx" Style="{StaticResource MetricLabel}" />
-                            <TextBlock Grid.Column="2" Text="{Binding RxText}" Style="{StaticResource MetricValue}" />
-                        </Grid>
-                        <Grid Margin="0,3">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="↑ tx" Style="{StaticResource MetricLabel}" />
-                            <TextBlock Grid.Column="2" Text="{Binding TxText}" Style="{StaticResource MetricValue}" />
-                        </Grid>
+                            <!-- CPU -->
+                            <Grid Margin="0,3">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="CPU" Style="{StaticResource MetricLabel}" />
+                                <ProgressBar Grid.Column="1" Style="{StaticResource PercentBar}" Value="{Binding CpuPct}" />
+                                <TextBlock Grid.Column="2" Text="{Binding CpuText}" Style="{StaticResource MetricValue}" />
+                            </Grid>
 
-                        <!-- Load + uptime -->
-                        <Grid Margin="0,10,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="Load" Style="{StaticResource MetricLabel}" />
-                            <TextBlock Grid.Column="1" Text="{Binding LoadText}" FontFamily="Consolas" VerticalAlignment="Center" />
-                        </Grid>
-                        <Grid Margin="0,3,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="稼働" Style="{StaticResource MetricLabel}" />
-                            <TextBlock Grid.Column="1" Text="{Binding UptimeText}" FontFamily="Consolas" VerticalAlignment="Center" />
-                        </Grid>
+                            <!-- Memory -->
+                            <Grid Margin="0,3">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="メモリ" Style="{StaticResource MetricLabel}" />
+                                <ProgressBar Grid.Column="1" Style="{StaticResource PercentBar}" Value="{Binding MemPct}" />
+                                <TextBlock Grid.Column="2" Text="{Binding MemText}" Style="{StaticResource MetricValue}" />
+                            </Grid>
 
-                    </StackPanel>
-                </DataTemplate>
-            </ContentControl.ContentTemplate>
-        </ContentControl>
-    </Grid>
+                            <!-- Swap -->
+                            <Grid Margin="0,3">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="Swap" Style="{StaticResource MetricLabel}" />
+                                <ProgressBar Grid.Column="1" Style="{StaticResource PercentBar}" Value="{Binding SwapPct}" />
+                                <TextBlock Grid.Column="2" Text="{Binding SwapText}" Style="{StaticResource MetricValue}" />
+                            </Grid>
+
+                            <!-- Disks (0..N mounts) -->
+                            <TextBlock Text="ディスク" Foreground="#B8BEC6" Margin="0,8,0,2" />
+                            <ItemsControl ItemsSource="{Binding Disks}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:DiskGaugeViewModel}">
+                                        <Grid Margin="0,3">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="{Binding Mount}" Style="{StaticResource MetricLabel}" />
+                                            <ProgressBar Grid.Column="1" Style="{StaticResource PercentBar}" Value="{Binding UsedPct}" />
+                                            <TextBlock Grid.Column="2" Text="{Binding UsedText}" Width="150"
+                                                       TextAlignment="Right" VerticalAlignment="Center"
+                                                       FontFamily="Consolas" Foreground="#F0F2F5" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <!-- Network (text only; rates have no fixed % scale) -->
+                            <TextBlock Text="ネットワーク" Foreground="#B8BEC6" Margin="0,10,0,2" />
+                            <Grid Margin="0,3">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="↓ rx" Style="{StaticResource MetricLabel}" />
+                                <TextBlock Grid.Column="2" Text="{Binding RxText}" Style="{StaticResource MetricValue}" />
+                            </Grid>
+                            <Grid Margin="0,3">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="↑ tx" Style="{StaticResource MetricLabel}" />
+                                <TextBlock Grid.Column="2" Text="{Binding TxText}" Style="{StaticResource MetricValue}" />
+                            </Grid>
+
+                            <!-- Load + uptime -->
+                            <Grid Margin="0,10,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="Load" Style="{StaticResource MetricLabel}" />
+                                <TextBlock Grid.Column="1" Text="{Binding LoadText}" FontFamily="Consolas"
+                                           Foreground="#F0F2F5" VerticalAlignment="Center" />
+                            </Grid>
+                            <Grid Margin="0,3,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="稼働" Style="{StaticResource MetricLabel}" />
+                                <TextBlock Grid.Column="1" Text="{Binding UptimeText}" FontFamily="Consolas"
+                                           Foreground="#F0F2F5" VerticalAlignment="Center" />
+                            </Grid>
+
+                        </StackPanel>
+                    </DataTemplate>
+                </ContentControl.ContentTemplate>
+            </ContentControl>
+        </StackPanel>
+    </Border>
 </Window>
