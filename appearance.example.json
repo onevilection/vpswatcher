@@ -1,5 +1,6 @@
 {
   "background_opacity": 0.9,
+  "master_volume": 0.8,
   "expressions": {
     "Normal": "mei-hutuu.png",
     "Caution": "mei-nayami.png",
@@ -8,5 +9,14 @@
     "Disconnected": "mei-konnrann.png",
     "HostKeyMismatch": "mei-ikari.png",
     "Recovery": "mei-yorokobi.png"
-  }
+  },
+  "sounds": {
+    "Caution":  { "cpu": "cpu_caution.wav",  "mem": "mem_caution.wav",  "disk": "disk_caution.wav",  "swap": "swap_caution.wav" },
+    "Warning":  { "cpu": "cpu_warning.wav",  "mem": "mem_warning.wav",  "disk": "disk_warning.wav",  "swap": "swap_warning.wav" },
+    "Critical": { "cpu": "cpu_critical.wav", "mem": "mem_critical.wav", "disk": "disk_critical.wav", "swap": "swap_critical.wav", "_default": "critical_default.wav" },
+    "Disconnected":   { "_default": "disconnected.wav" },
+    "HostKeyMismatch": { "_default": "security_alert.wav" },
+    "Recovery":       { "_default": "recovery.wav" }
+  },
+  "click": { "ok_sound": "all_ok.wav", "ok_expression": "mei-yorokobi.png" }
 }

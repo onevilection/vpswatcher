@@ -46,6 +46,10 @@ public sealed partial class ServerViewModel : ObservableObject
         // than being left unjudged (the "always Normal" bug). The machine's own contract is unchanged.
         _alerts = new AlertStateMachine(id, DefaultThresholds.Resolve(thresholds, id, logger), logger);
         _alerts.StateChanged += (_, e) => AlertState = e.NewState;
+        // Re-raise the machine's "a voice should sound" event (already cooldown-gated, §6.4) so the
+        // window can drive audio (§7). Fires on the UI thread (the machine is only called from the
+        // UI-thread-marshaled handlers below).
+        _alerts.AlertTriggered += (_, e) => AlertTriggered?.Invoke(this, e);
     }
 
     /// <summary>Stable server id (matches NDJSON <c>id</c> / servers.json). Set once.</summary>
@@ -53,6 +57,10 @@ public sealed partial class ServerViewModel : ObservableObject
 
     /// <summary>Display label; falls back to <see cref="Id"/>. Set once.</summary>
     public string Label { get; }
+
+    /// <summary>Raised when this server's alert escalates and a voice should sound (§6.4/§7) — a
+    /// re-raise of the state machine's gated <c>AlertTriggered</c>. Carries level + cause, no secrets.</summary>
+    public event EventHandler<AlertTriggeredEventArgs>? AlertTriggered;
 
     /// <summary>Up-to-8-char identifier for the compact 200px row (Phase 6b §1). First 8 chars of the
     /// label (which itself falls back to the id) — label-based so servers whose ids share a long

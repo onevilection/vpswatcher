@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="NAudio" Version="2.3.0" />
   </ItemGroup>
 
   <!-- App-bundled assets (Phase 6a). The icons + character live at the repo root /assets so both
@@ -39,6 +40,12 @@
     <Resource Include="..\..\assets\char\mei-konnrann.png" Link="Assets\char\mei-konnrann.png" />
     <Resource Include="..\..\assets\char\mei-ikari.png" Link="Assets\char\mei-ikari.png" />
     <Resource Include="..\..\assets\char\mei-yorokobi.png" Link="Assets\char\mei-yorokobi.png" />
+  </ItemGroup>
+
+  <!-- App-bundled alert voices (Phase 6c, §7). Linked into the resource set at /Assets/voice/* and
+       read as a stream by NAudio (pack URI). Users can override per-file via %APPDATA%\…\assets\voice. -->
+  <ItemGroup>
+    <Resource Include="..\..\assets\voice\*.wav" Link="Assets\voice\%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

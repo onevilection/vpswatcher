@@ -43,7 +43,22 @@ public sealed class AppearanceConfig
     [JsonPropertyName("expressions")]
     public Dictionary<string, string>? Expressions { get; set; }
 
-    /// <summary>Round-trips keys this phase doesn't model yet (e.g. 6c voice map) so they survive a save.</summary>
+    /// <summary>Master playback volume 0..1 (§9.2). Absent / invalid → <see cref="DefaultMasterVolume"/>.</summary>
+    [JsonPropertyName("master_volume")]
+    public double? MasterVolume { get; set; }
+
+    /// <summary>Alert sounds (§7): level name → (cause metric → WAV file). The special cause key
+    /// <c>_default</c> is used when no per-metric sound is configured. Missing entries fall back to the
+    /// bundled <see cref="DefaultSounds"/>.</summary>
+    [JsonPropertyName("sounds")]
+    public Dictionary<string, Dictionary<string, string>>? Sounds { get; set; }
+
+    /// <summary>Click-to-speak settings (§4): the all-clear sound + expression played when the user
+    /// clicks the character while everything is Normal.</summary>
+    [JsonPropertyName("click")]
+    public ClickConfig? Click { get; set; }
+
+    /// <summary>Round-trips keys this phase doesn't model yet so they survive a save.</summary>
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? Extra { get; set; }
 
@@ -107,6 +122,107 @@ public sealed class AppearanceConfig
         }
         return DefaultExpressions[mood];
     }
+
+    // ───────────────────────── audio (§7) ─────────────────────────
+
+    /// <summary>Default master volume when unset/invalid (§9.2).</summary>
+    public const double DefaultMasterVolume = 0.8;
+
+    /// <summary>Last-resort sound when neither a per-cause nor a level <c>_default</c> exists.</summary>
+    public const string FallbackSound = "critical_default.wav";
+
+    /// <summary>Bundled default sound map (§7.2): level → (cause → WAV). Metric bands carry one WAV per
+    /// metric; connection / recovery states carry only a <c>_default</c>.</summary>
+    public static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> DefaultSounds =
+        new Dictionary<string, IReadOnlyDictionary<string, string>>
+        {
+            ["Caution"] = new Dictionary<string, string>
+            { ["cpu"] = "cpu_caution.wav", ["mem"] = "mem_caution.wav", ["disk"] = "disk_caution.wav", ["swap"] = "swap_caution.wav" },
+            ["Warning"] = new Dictionary<string, string>
+            { ["cpu"] = "cpu_warning.wav", ["mem"] = "mem_warning.wav", ["disk"] = "disk_warning.wav", ["swap"] = "swap_warning.wav" },
+            ["Critical"] = new Dictionary<string, string>
+            { ["cpu"] = "cpu_critical.wav", ["mem"] = "mem_critical.wav", ["disk"] = "disk_critical.wav", ["swap"] = "swap_critical.wav", ["_default"] = "critical_default.wav" },
+            ["Disconnected"] = new Dictionary<string, string> { ["_default"] = "disconnected.wav" },
+            ["HostKeyMismatch"] = new Dictionary<string, string> { ["_default"] = "security_alert.wav" },
+            ["Recovery"] = new Dictionary<string, string> { ["_default"] = "recovery.wav" },
+        };
+
+    /// <summary>Master volume in [0,1]: out-of-range clamped; null / NaN → <see cref="DefaultMasterVolume"/>.</summary>
+    public float EffectiveMasterVolume()
+    {
+        if (MasterVolume is not { } v || double.IsNaN(v))
+            return (float)DefaultMasterVolume;
+        return (float)Math.Clamp(v, 0.0, 1.0);
+    }
+
+    /// <summary>Normalises an AlertStateMachine cause to a sound cause key: <c>disk:/mnt</c> → <c>disk</c>;
+    /// <c>cpu/mem/swap</c> unchanged; <c>connection</c> / null / anything else → null (use the level's
+    /// <c>_default</c>).</summary>
+    public static string? NormalizeCause(string? cause)
+    {
+        if (string.IsNullOrEmpty(cause))
+            return null;
+        if (cause.StartsWith("disk", StringComparison.Ordinal))
+            return "disk";
+        return cause is "cpu" or "mem" or "swap" ? cause : null;
+    }
+
+    /// <summary>
+    /// The WAV file for an alert: configured <c>sounds[level][cause]</c> → configured
+    /// <c>sounds[level][_default]</c> → bundled default for that (level, cause) → bundled level
+    /// <c>_default</c> → <see cref="FallbackSound"/>. <paramref name="cause"/> is a normalised metric
+    /// key (cpu/mem/disk/swap) or null for connection/recovery states.
+    /// </summary>
+    public string SoundFileFor(AlertLevel level, string? cause)
+    {
+        var levelKey = level.ToString();
+
+        // 1) user-configured map for this level
+        if (Sounds is not null && Sounds.TryGetValue(levelKey, out var configured) && configured is not null)
+        {
+            if (cause is not null && configured.TryGetValue(cause, out var byCause) && !string.IsNullOrWhiteSpace(byCause))
+                return byCause.Trim();
+            if (configured.TryGetValue("_default", out var def) && !string.IsNullOrWhiteSpace(def))
+                return def.Trim();
+        }
+
+        // 2) bundled defaults for this level
+        if (DefaultSounds.TryGetValue(levelKey, out var defaults))
+        {
+            if (cause is not null && defaults.TryGetValue(cause, out var byCause))
+                return byCause;
+            if (defaults.TryGetValue("_default", out var def))
+                return def;
+        }
+
+        // 3) last resort
+        return FallbackSound;
+    }
+
+    /// <summary>All-clear sound for a click while Normal (§4). Blank / missing → bundled default.</summary>
+    public string ClickOkSound()
+        => Click?.OkSound is { } s && !string.IsNullOrWhiteSpace(s) ? s.Trim() : "all_ok.wav";
+
+    /// <summary>The gentle recovery voice played when everything returns to Normal (§6.4). Driven by
+    /// the worst-of transition, not an AlertTriggered, so it has its own accessor: configured
+    /// <c>sounds["Recovery"]["_default"]</c> → bundled <c>recovery.wav</c>.</summary>
+    public string RecoverySound()
+    {
+        if (Sounds is not null && Sounds.TryGetValue("Recovery", out var m) && m is not null
+            && m.TryGetValue("_default", out var f) && !string.IsNullOrWhiteSpace(f))
+            return f.Trim();
+        return DefaultSounds["Recovery"]["_default"];
+    }
+}
+
+/// <summary>Click-to-speak settings (§4, Phase 6c).</summary>
+public sealed class ClickConfig
+{
+    /// <summary>Sound played when the user clicks the character while everything is Normal.</summary>
+    [JsonPropertyName("ok_sound")] public string? OkSound { get; set; }
+
+    /// <summary>Expression shown for the all-clear click (defaults to the Recovery portrait).</summary>
+    [JsonPropertyName("ok_expression")] public string? OkExpression { get; set; }
 }
 
 /// <summary>
@@ -131,6 +247,12 @@ public static class AppearanceStore
     public static string DefaultUserCharDir => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "VpsWatcher", "assets", "char");
+
+    /// <summary>User WAV override directory: <c>%APPDATA%\VpsWatcher\assets\voice</c> — a WAV dropped
+    /// here (matching a configured/default file name) replaces the bundled one (§7 user-overridable).</summary>
+    public static string DefaultUserVoiceDir => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "VpsWatcher", "assets", "voice");
 
     public static AppearanceConfig Load(string path, IAppLogger? logger = null)
     {

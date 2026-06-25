@@ -50,8 +50,13 @@ public partial class App : Application
         images.PreloadAll();
         var recovery = new DispatcherRecoveryScheduler(Dispatcher);
 
+        // Audio (§7): serial alert voice + click-to-speak. Volume is read live so an edited
+        // appearance.json master_volume could take effect without rebuilding the service.
+        var audio = new AudioAlertService(
+            new NAudioPlayer(_logger), new SoundResolver(), () => appearance.EffectiveMasterVolume(), _logger);
+
         _mainViewModel = new MainViewModel(
-            configs, configError, dispatcher, _logger, appearance, images, recovery)
+            configs, configError, dispatcher, _logger, appearance, images, recovery, audio)
         {
             AlwaysOnTop = _state.AlwaysOnTop, // restore (§5.2.1)
         };

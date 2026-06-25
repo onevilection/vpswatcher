@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using VpsWatcher.App.Configuration;
 using VpsWatcher.App.Services;
 using VpsWatcher.Core.Alerts;
@@ -51,6 +52,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     private readonly ICharacterImageSource? _images;
     private readonly IRecoveryScheduler? _recovery;
+    private readonly IAlertAudio? _audio;
+    private AppearanceConfig _appearance = new();
 
     /// <summary>Worst-of overall state across all servers — the single "mood" of the one character
     /// (§8: one Mei expresses the worst server). Recomputed when any server's AlertState changes.</summary>
@@ -83,12 +86,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         IAppLogger? logger = null,
         AppearanceConfig? appearance = null,
         ICharacterImageSource? images = null,
-        IRecoveryScheduler? recovery = null)
+        IRecoveryScheduler? recovery = null,
+        IAlertAudio? audio = null)
     {
         _logger = logger;
         _images = images;
         _recovery = recovery;
-        ApplyInitialAppearance(appearance ?? new AppearanceConfig());
+        _audio = audio;
+        _appearance = appearance ?? new AppearanceConfig();
+        ApplyInitialAppearance(_appearance);
 
         if (configs is null || configs.Count == 0)
         {
@@ -112,8 +118,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
                 _connections.Add((service, vm));
                 Servers.Add(vm);
-                // Drive the one shared character mood off each server's overall state (§8 worst-of).
+                // Drive the one shared character mood off each server's overall state (§8 worst-of),
+                // and its alert escalations into the voice (§7).
                 vm.PropertyChanged += OnServerPropertyChanged;
+                vm.AlertTriggered += OnServerAlertTriggered;
                 service.Start();
             }
             catch (Exception ex)
@@ -165,17 +173,21 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         AppearanceConfig? appearance = null,
         ICharacterImageSource? images = null,
         IRecoveryScheduler? recovery = null,
-        IAppLogger? logger = null)
+        IAppLogger? logger = null,
+        IAlertAudio? audio = null)
     {
         _logger = logger;
         _images = images;
         _recovery = recovery;
-        ApplyInitialAppearance(appearance ?? new AppearanceConfig());
+        _audio = audio;
+        _appearance = appearance ?? new AppearanceConfig();
+        ApplyInitialAppearance(_appearance);
 
         foreach (var vm in servers)
         {
             Servers.Add(vm);
             vm.PropertyChanged += OnServerPropertyChanged;
+            vm.AlertTriggered += OnServerAlertTriggered;
         }
         RecomputeWorstState();
     }
@@ -223,17 +235,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         if (newValue == AlertLevel.Normal && oldValue != AlertLevel.Normal)
         {
-            // Recovered to all-clear: show the transient yorokobi, then revert to Normal after a beat.
-            CurrentMood = CharacterMood.Recovery;
-            if (_recovery is not null)
-                _recovery.Schedule(RecoveryDuration, () =>
-                {
-                    // Guard against a re-escalation that landed during the delay.
-                    if (WorstState == AlertLevel.Normal)
-                        CurrentMood = CharacterMood.Normal;
-                });
-            else
-                CurrentMood = CharacterMood.Normal; // no scheduler (tests) ⇒ skip the transient hold
+            // Recovered to all-clear: the gentle recovery voice (§6.4, low priority so a fresh alert
+            // outranks it) + the transient yorokobi portrait, then revert to Normal after a beat.
+            _audio?.Enqueue(AlertLevel.Normal, _appearance.RecoverySound());
+            ShowRecoveryThenNormal();
         }
         else
         {
@@ -243,8 +248,52 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>Shows the transient recovery (yorokobi) portrait, reverting to Normal after a beat
+    /// (unless something re-escalated meanwhile). Used by both the recovery transition and an
+    /// all-clear click.</summary>
+    private void ShowRecoveryThenNormal()
+    {
+        CurrentMood = CharacterMood.Recovery;
+        if (_recovery is not null)
+            _recovery.Schedule(RecoveryDuration, () =>
+            {
+                if (WorstState == AlertLevel.Normal)
+                    CurrentMood = CharacterMood.Normal;
+            });
+        else
+            CurrentMood = CharacterMood.Normal; // no scheduler (tests) ⇒ skip the transient hold
+    }
+
     partial void OnCurrentMoodChanged(CharacterMood value)
         => CharacterImage = _images?.ImageFor(value);
+
+    // ───────────────────────── audio (§7) ─────────────────────────
+
+    /// <summary>An escalation sounded a voice (§6.4/§7): pick the WAV for (level, cause) and queue it.</summary>
+    private void OnServerAlertTriggered(object? sender, AlertTriggeredEventArgs e)
+    {
+        var file = _appearance.SoundFileFor(e.Level, AppearanceConfig.NormalizeCause(e.Cause));
+        _audio?.Enqueue(e.Level, file);
+    }
+
+    /// <summary>
+    /// Click-to-speak (§4): the user clicked the character, so voice the current worst-of status at
+    /// once (interrupting any alert). All-clear also flashes the recovery portrait.
+    /// </summary>
+    [RelayCommand]
+    private void CharacterClick()
+    {
+        var (level, cause) = ClickStatusResolver.Resolve(Servers, WorstState);
+
+        if (level == AlertLevel.Normal)
+        {
+            _audio?.PlayNow(AlertLevel.Normal, _appearance.ClickOkSound());
+            ShowRecoveryThenNormal();
+            return;
+        }
+
+        _audio?.PlayNow(level, _appearance.SoundFileFor(level, cause));
+    }
 
     /// <summary>How long shutdown waits for the reconnect loops to wind down before giving up.</summary>
     private static readonly TimeSpan ShutdownGrace = TimeSpan.FromSeconds(3);
@@ -257,8 +306,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             service.MetricsReceived -= vm.HandleMetrics;
             service.StateChanged -= vm.HandleStateChanged;
             vm.PropertyChanged -= OnServerPropertyChanged;
+            vm.AlertTriggered -= OnServerAlertTriggered;
         }
         _recovery?.Cancel();
+        _audio?.Dispose();
 
         // Bundle the cancellation: StopAsync cancels each loop's token, then we await them together
         // (bounded) so no SSH read loop / connection is left running past window close — instead of

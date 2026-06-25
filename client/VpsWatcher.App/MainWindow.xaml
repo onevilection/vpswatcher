@@ -139,10 +139,17 @@
                        FontSize="11" />
 
             <!-- Character (Phase 6b): portrait swaps with the worst-of state via CharacterImage (§8).
-                 Servers stack up from her feet — she sits directly above the icon header + rows. -->
+                 Servers stack up from her feet — she sits directly above the icon header + rows.
+                 Phase 6c: clicking her speaks the current worst-of status (§4). Hit-testing is the
+                 image bounds, separate from the title-bar drag handle, so it can't fight a drag. -->
             <Image Source="{Binding CharacterImage}" Width="140" HorizontalAlignment="Center"
-                   Margin="0,0,0,-4" Stretch="Uniform"
-                   Visibility="{Binding HasServer, Converter={StaticResource BoolToVis}}" />
+                   Margin="0,0,0,-4" Stretch="Uniform" Cursor="Hand"
+                   ToolTip="クリックで現在の状態を読み上げ"
+                   Visibility="{Binding HasServer, Converter={StaticResource BoolToVis}}">
+                <Image.InputBindings>
+                    <MouseBinding MouseAction="LeftClick" Command="{Binding CharacterClickCommand}" />
+                </Image.InputBindings>
+            </Image>
 
             <StackPanel Visibility="{Binding HasServer, Converter={StaticResource BoolToVis}}">
 
