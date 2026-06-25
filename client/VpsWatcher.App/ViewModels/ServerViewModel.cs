@@ -51,19 +51,39 @@ public sealed partial class ServerViewModel : ObservableObject
     /// <summary>Display label; falls back to <see cref="Id"/>. Set once.</summary>
     public string Label { get; }
 
+    /// <summary>Up-to-4-char identifier for the compact 200px row (Phase 6a §3). First 4 chars of the
+    /// label (which itself falls back to the id). Set once.</summary>
+    public string ShortId => Label.Length <= 4 ? Label : Label[..4];
+
     // ───────────────────────── metrics (bindable) ─────────────────────────
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CpuText))]
+    [NotifyPropertyChangedFor(nameof(CpuPctText))]
     private double? _cpuPct;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(MemText))]
+    [NotifyPropertyChangedFor(nameof(MemPctText))]
     private double _memPct;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SwapText))]
+    [NotifyPropertyChangedFor(nameof(SwapPctText))]
     private double _swapPct;
+
+    // Per-metric alert bands (§6) — each drives its own number's colour in the compact row. Mirrored
+    // from the per-server AlertStateMachine after every sample; only changes notify (§13.2).
+    [ObservableProperty] private AlertLevel _cpuLevel = AlertLevel.Normal;
+    [ObservableProperty] private AlertLevel _memLevel = AlertLevel.Normal;
+    [ObservableProperty] private AlertLevel _swapLevel = AlertLevel.Normal;
+
+    // Root filesystem ("/") is the row's representative disk (§3). Null pct = no root mount reported.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RootDiskPctText))]
+    private double? _rootDiskPct;
+
+    [ObservableProperty] private AlertLevel _rootDiskLevel = AlertLevel.Normal;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(RxText))]
@@ -115,6 +135,12 @@ public sealed partial class ServerViewModel : ObservableObject
     public string CpuText => CpuPct is { } v ? $"{v:0.0}%" : Measuring;
     public string MemText => $"{MemPct:0.0}%";
     public string SwapText => $"{SwapPct:0.0}%";
+
+    // Compact, no-decimal percentages for the 200px row (§3/§5). null (measuring) → "--".
+    public string CpuPctText => CpuPct is { } v ? $"{v:0}%" : "--";
+    public string MemPctText => $"{MemPct:0}%";
+    public string SwapPctText => $"{SwapPct:0}%";
+    public string RootDiskPctText => RootDiskPct is { } v ? $"{v:0}%" : "--";
     public string RxText => RxBps is { } v ? FormatRate(v) : Measuring;
     public string TxText => TxBps is { } v ? FormatRate(v) : Measuring;
     public string LoadText => $"{Load1:0.00} / {Load5:0.00} / {Load15:0.00}";
@@ -174,6 +200,20 @@ public sealed partial class ServerViewModel : ObservableObject
         // Drive the alert state machine from the same sample (UI thread). It applies hysteresis /
         // debounce / worst-of and raises StateChanged → AlertState (§6).
         _alerts.ProcessSample(s);
+
+        // Mirror each metric's band onto the bindable per-metric levels that colour the row (§6).
+        // Assigning an unchanged value is a no-op (ObservableProperty equality check) so only real
+        // band transitions notify the View (§13.2).
+        CpuLevel = _alerts.CpuLevel;
+        MemLevel = _alerts.MemLevel;
+        SwapLevel = _alerts.SwapLevel;
+        foreach (var disk in Disks)
+            disk.Level = _alerts.DiskLevel(disk.Mount);
+
+        // Root "/" is the row's representative disk; other mounts expand to sub-rows (Phase 6a).
+        var root = Disks.FirstOrDefault(d => d.IsRoot);
+        RootDiskPct = root?.UsedPct;
+        RootDiskLevel = root?.Level ?? AlertLevel.Normal;
     }
 
     /// <summary>

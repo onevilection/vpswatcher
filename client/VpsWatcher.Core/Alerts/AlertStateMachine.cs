@@ -73,6 +73,24 @@ public sealed class AlertStateMachine
     /// <summary>Current overall state (worst-of metrics, then connection priority).</summary>
     public AlertLevel State { get; private set; } = AlertLevel.Normal;
 
+    // ───────── per-metric levels (read-only view for the UI, §6 metric colours) ─────────
+    // The View colours each metric's number by its own band. These expose the trackers' current
+    // level without changing any judgement (Phase 5 logic untouched); a metric that isn't judged
+    // (no thresholds configured) reports Normal. Read on the UI thread right after ProcessSample.
+
+    /// <summary>Current CPU band (Normal when CPU isn't judged).</summary>
+    public AlertLevel CpuLevel => _cpu?.Level ?? AlertLevel.Normal;
+
+    /// <summary>Current memory band (Normal when memory isn't judged).</summary>
+    public AlertLevel MemLevel => _mem?.Level ?? AlertLevel.Normal;
+
+    /// <summary>Current swap band (Normal when swap isn't judged).</summary>
+    public AlertLevel SwapLevel => _swap?.Level ?? AlertLevel.Normal;
+
+    /// <summary>Current band for a disk mount (Normal when unknown / disk isn't judged).</summary>
+    public AlertLevel DiskLevel(string mount)
+        => _disks.TryGetValue(mount, out var t) ? t.Level : AlertLevel.Normal;
+
     public event EventHandler<AlertStateChangedEventArgs>? StateChanged;
     public event EventHandler<AlertTriggeredEventArgs>? AlertTriggered;
 

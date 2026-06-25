@@ -24,4 +24,15 @@
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
   </ItemGroup>
 
+  <!-- App-bundled assets (Phase 6a). The icons + character live at the repo root /assets so both
+       components can share them; they are linked into the WPF resource set (compiled into the
+       single-file exe) at /Assets/... and addressed via pack URIs. Not secrets (CLAUDE.md). -->
+  <ItemGroup>
+    <Resource Include="..\..\assets\icon\cpu.png" Link="Assets\icon\cpu.png" />
+    <Resource Include="..\..\assets\icon\memory.png" Link="Assets\icon\memory.png" />
+    <Resource Include="..\..\assets\icon\disc.png" Link="Assets\icon\disc.png" />
+    <Resource Include="..\..\assets\icon\swap.png" Link="Assets\icon\swap.png" />
+    <Resource Include="..\..\assets\char\mei-hutuu.png" Link="Assets\char\mei-hutuu.png" />
+  </ItemGroup>
+
 </Project>
