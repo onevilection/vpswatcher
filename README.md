@@ -8,6 +8,16 @@ N台の Ubuntu VPS の CPU / メモリ / ストレージ / ネットワークを
 
 > 詳細仕様は [`docs/design.md`](docs/design.md)（設計書・正典）を参照。
 
+## デモ
+
+https://github.com/user-attachments/assets/fcf5580e-3e98-4cbb-94e1-04b0993829cf
+
+| 通常時 | 注意（ディスク 88%） | 警告（ディスク 91%） |
+|---|---|---|
+| ![通常時のスクリーンショット](assets/screenshots/screenshot-20260625-173054.png) | ![ディスク 88% で表情が変化](assets/screenshots/screenshot-20260625-180436.png) | ![ディスク 91% でさらに表情が変化](assets/screenshots/screenshot-20260625-180457.png) |
+
+全サーバ中の最悪の状態に応じて Mei の表情が変わり（穏やか → 心配 → 驚き）、各メトリクスの数値はしきい値レベルごとに色分けされる。立ち絵・背景・音声・しきい値はすべて差し替え・調整できる。
+
 ---
 
 ## 構成（2コンポーネント）
