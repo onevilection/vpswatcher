@@ -52,8 +52,8 @@ sudo mkdir -p /opt/vpswatcher
 
 cd /tmp
 # バイナリと SHA256 を「元のファイル名のまま」両方ダウンロード
-curl -fsSLO https://github.com/onevilection/vps-monitor-mei/releases/latest/download/agent-linux-amd64
-curl -fsSLO https://github.com/onevilection/vps-monitor-mei/releases/latest/download/agent-linux-amd64.sha256
+curl -fsSLO https://github.com/onevilection/vpswatcher/releases/latest/download/agent-linux-amd64
+curl -fsSLO https://github.com/onevilection/vpswatcher/releases/latest/download/agent-linux-amd64.sha256
 
 # 改ざん検証（.sha256 内のファイル名と一致するので検証が通る）
 sha256sum -c agent-linux-amd64.sha256
@@ -138,7 +138,7 @@ ssh -i "$env:USERPROFILE\.ssh\watcher_ed25519" -p <port> metrics@<host>
 
 GitHub Releases の **v0.1.0** から self-contained 単一 exe をダウンロードして実行する。
 
-1. **ダウンロード**: [Releases](https://github.com/onevilection/vps-monitor-mei/releases) の v0.1.0 から `VpsWatcher.App.exe` と `VpsWatcher.App.exe.sha256` の**両方**を取得する。
+1. **ダウンロード**: [Releases](https://github.com/onevilection/vpswatcher/releases) の v0.1.0 から `VpsWatcher.App.exe` と `VpsWatcher.App.exe.sha256` の**両方**を取得する。
 
 2. **SHA256 で完全性を検証**（agent 側の `sha256sum -c` と同じ思想）。PowerShell で 2 つの値が一致することを確認する:
 

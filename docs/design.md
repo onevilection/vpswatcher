@@ -453,8 +453,8 @@ ResizeMode="NoResize"
 
   cd /tmp
   # バイナリと SHA256 を「元のファイル名のまま」両方ダウンロード（amd64 の例）
-  curl -fsSLO https://github.com/onevilection/vps-monitor-mei/releases/latest/download/agent-linux-amd64
-  curl -fsSLO https://github.com/onevilection/vps-monitor-mei/releases/latest/download/agent-linux-amd64.sha256
+  curl -fsSLO https://github.com/onevilection/vpswatcher/releases/latest/download/agent-linux-amd64
+  curl -fsSLO https://github.com/onevilection/vpswatcher/releases/latest/download/agent-linux-amd64.sha256
 
   # 改ざん検証（.sha256 内のファイル名と一致するので検証が通る）
   sha256sum -c agent-linux-amd64.sha256
@@ -562,7 +562,7 @@ jobs:
 ### 15.2 リポジトリ構成（モノレポ）
 結合した2コンポーネント＋共有契約のため**単一リポジトリ**にする。
 ```
-vps-monitor-mei/
+vpswatcher/
 ├─ agent/                 # Goエージェント（VPS側Claude Codeが主担当）
 ├─ client/                # WPFクライアント（Windows側Claude Codeが主担当）
 ├─ docs/

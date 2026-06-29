@@ -22,7 +22,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/onevilection/vps-monitor-mei/agent/internal/metrics"
+	"github.com/onevilection/vpswatcher/agent/internal/metrics"
 )
 
 func main() {

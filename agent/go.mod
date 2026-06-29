@@ -1,3 +1,3 @@
-module github.com/onevilection/vps-monitor-mei/agent
+module github.com/onevilection/vpswatcher/agent
 
 go 1.26.4

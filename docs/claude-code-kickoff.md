@@ -2,7 +2,7 @@
 
 > 使い方：この内容を、**dev VPS上のClaude Code**に最初の指示として渡す。
 > 前提：GitHubの組織リポジトリは会社アカウントで**手動作成済み**、個人アカウントはコラボレーター。
-> リモートURLは会社org名のもの（例 `git@github.com:<org>/vps-monitor-mei.git`）。
+> リモートURLは会社org名のもの（例 `git@github.com:<org>/vpswatcher.git`）。
 
 ---
 
@@ -37,7 +37,7 @@ assets/           （キャラ・音声の置き場。中身は後日）
 - この2ファイルが agent/client 双方のテストの参照点になることをコメントで明記。
 
 ## 5. Goエージェントの最小スケルトン（ビルドが通るだけ）
-- `agent/go.mod` を初期化（モジュール名は `github.com/<org>/vps-monitor-mei/agent` で確認）。
+- `agent/go.mod` を初期化（モジュール名は `github.com/<org>/vpswatcher/agent` で確認）。
 - `agent/main.go` は、まずは「1秒ごとにsample準拠のダミーJSONを1行stdoutへ出すループ」だけ。実際の `/proc` 読み取りは次セッション。
 - `go build ./...` と `go vet ./...` が通ることを確認。
 - 低負荷規約（forkしない・sleepベース・正常時ログなし）をコメントで宣言。
