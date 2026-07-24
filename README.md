@@ -165,6 +165,9 @@ GitHub Releases の **v0.1.0** から self-contained 単一 exe をダウンロ�
 
 - ⚠️ **SmartScreen 警告**: 署名なし exe のため初回起動時に保護警告が出る。自分用／少人数なら「詳細情報 → 実行」で続行可。
 - ⚠️ **サイズ**: .NET ランタイム同梱のため ~170MB になる（ゼロインストールとのトレードオフ）。
+> **セキュリティ警告について**
+> 本アプリは現在コード署名を行っていないため、初回起動時に Windows SmartScreen の警告が表示されることがあります。その場合は「詳細情報」→「実行」で起動できます。
+> また、**スマートアプリコントロール**（Windows 11 の一部環境で有効）が有効な場合、アプリの起動自体がブロックされることがあります。その場合は Windows セキュリティ →「アプリとブラウザーの制御」→「スマートアプリコントロールの設定」からオフにしてください。詳細は [`docs/adr/ADR-0001-code-signing-and-smart-app-control.md`](docs/adr/ADR-0001-code-signing-and-smart-app-control.md) を参照。
 
 #### 初回設定（servers.json）
 
